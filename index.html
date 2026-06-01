@@ -32,6 +32,44 @@
             justify-content: center;
             align-items: flex-start;
         }
+
+        /* --- LAYOUT BARU UNTUK BAR EVALUASI --- */
+        .board-wrapper {
+            display: flex;
+            gap: 15px;
+            align-items: stretch;
+        }
+
+        .eval-bar-container {
+            width: 25px;
+            background-color: #333; /* Background Hitam */
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end; /* Membangun bar dari bawah (Putih) */
+            position: relative;
+            border: 2px solid #1e1e1e;
+        }
+
+        .eval-fill {
+            width: 100%;
+            background-color: #f3f3f3; /* Fill Putih */
+            height: 50%; /* Posisi Seimbang 0.0 */
+            transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .eval-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 11px;
+            font-weight: 800;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+        /* -------------------------------------- */
         
         #myBoard {
             width: 400px;
@@ -57,17 +95,12 @@
         #status { font-weight: bold; font-size: 1.1em; color: #fff;}
         
         #pgn { 
-            font-family: monospace; 
-            color: #888; 
-            font-size: 0.9em; 
-            margin-top: 10px;
-            word-wrap: break-word;
+            font-family: monospace; color: #888; font-size: 0.9em; 
+            margin-top: 10px; word-wrap: break-word;
         }
         
         .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
         }
         
         button {
@@ -85,42 +118,42 @@
             background-color: #3a3a3a;
             padding: 12px;
             border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            font-size: 1.05em;
-            border: 1px solid #555;
-            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            gap: 15px; font-size: 1.05em; border: 1px solid #555; cursor: pointer;
         }
-        .toggle-container input {
-            width: 18px; height: 18px; cursor: pointer;
-        }
+        .toggle-container input { width: 18px; height: 18px; cursor: pointer; }
 
-        /* Gaya Bayangan ala Chess.com (Kuning Transparan) */
-        .highlight-move {
-            background-color: rgba(255, 255, 51, 0.5) !important;
-        }
+        .highlight-move { background-color: rgba(255, 255, 51, 0.5) !important; }
     </style>
 </head>
 <body>
 
     <h1>NextGen Chess Analyzer</h1>
-    <p class="subtitle">Analisis posisi dengan AI & mode bayangan otomatis</p>
+    <p class="subtitle">Realtime Evaluation Bar & Stockfish 13</p>
 
     <div class="container">
-        <div id="myBoard"></div>
+        
+        <!-- Papan & Bar Evaluasi -->
+        <div class="board-wrapper">
+            <!-- Indikator Eval Bar -->
+            <div id="evalBar" class="eval-bar-container">
+                <div id="evalText" class="eval-text">0.0</div>
+                <div id="evalFill" class="eval-fill"></div>
+            </div>
+            
+            <div id="myBoard"></div>
+        </div>
 
         <div class="panel">
             <div class="status-box">
-                <div>Status: <span id="status">Menunggu langkah...</span></div>
+                <div>Status: <span id="status">Menyiapkan AI...</span></div>
                 <div id="pgn"></div>
             </div>
 
             <div class="controls">
                 <button id="startBtn">Reset Posisi</button>
                 <button id="flipBtn">Putar Papan</button>
-                <button id="undoBtn">Tarik Langkah (Undo)</button>
+                <button id="undoBtn">Tarik Langkah</button>
                 <button id="clearBtn">Kosongkan Papan</button>
                 
                 <label class="toggle-container">
@@ -143,15 +176,93 @@
         var $status = $('#status');
         var $pgn = $('#pgn');
 
-        // FUNGSI YANG DIPERBAIKI: Pasti bersih 100% dari bayangan lama
         function removeHighlights () {
             $('#myBoard .highlight-move').removeClass('highlight-move');
         }
 
         function highlightLastMove (source, target) {
-            removeHighlights(); // Bersihkan yang lama dulu
+            removeHighlights();
             $('#myBoard .square-' + source).addClass('highlight-move');
             $('#myBoard .square-' + target).addClass('highlight-move');
+        }
+
+        // FUNGSI BARU: Mengatur Tinggi & Teks Eval Bar
+        function updateEvalBar(evalScore, mate) {
+            var percent = 50;
+            var text = "0.0";
+
+            if (mate !== null && mate !== undefined && mate !== "") {
+                // Jika ada status Skakmat Pasti (M1, M2, dst)
+                var mateNum = parseInt(mate);
+                if (mateNum > 0) {
+                    percent = 100; text = "M" + mateNum; // Putih Menang
+                } else {
+                    percent = 0; text = "-M" + Math.abs(mateNum); // Hitam Menang
+                }
+            } else {
+                // Kalkulasi keunggulan poin standar
+                var score = parseFloat(evalScore);
+                if (isNaN(score)) score = 0;
+
+                // Membatasi poin visual di -10 sampai +10
+                var visualScore = Math.max(-10, Math.min(10, score));
+                
+                // Konversi skor ke persentase bar (Setiap 1 poin menggerakkan bar 5%)
+                percent = 50 + (visualScore * 5);
+                
+                text = score > 0 ? "+" + score.toFixed(1) : score.toFixed(1);
+            }
+
+            $('#evalFill').css('height', percent + '%');
+
+            var $evalText = $('#evalText');
+            $evalText.text(text);
+
+            // Geser posisi teks agar tidak tertutup warna background yang sama
+            if (percent > 50) {
+                // Putih mendominasi, teks turun ke area putih (font gelap)
+                $evalText.css({ 'bottom': '5px', 'top': 'auto', 'color': '#222' });
+            } else {
+                // Hitam mendominasi, teks naik ke area hitam (font terang)
+                $evalText.css({ 'top': '5px', 'bottom': 'auto', 'color': '#ddd' });
+            }
+        }
+
+        // FUNGSI INTI: Analisis Posisi (Bisa Jalan AI, Bisa Sekadar Cek Bar Saja)
+        function fetchAnalysis(makeAiMove) {
+            if (game.game_over()) return;
+            
+            $status.html('Stockfish sedang mengevaluasi...');
+            var currentFen = game.fen();
+            
+            $.ajax({
+                url: 'https://stockfish.online/api/s/v2.php',
+                type: 'GET',
+                data: { fen: currentFen, depth: 13 },
+                success: function(response) {
+                    if(response.success) {
+                        // 1. Update Bar Realtime!
+                        updateEvalBar(response.evaluation, response.mate);
+                        updateStatus();
+
+                        // 2. Eksekusi Langkah AI JIKA Diperlukan
+                        if (makeAiMove && response.bestmove) {
+                            var bestMoveUCI = response.bestmove.split(' ')[1];
+                            var moveObj = game.move(bestMoveUCI, {sloppy: true});
+                            board.position(game.fen());
+                            highlightLastMove(moveObj.from, moveObj.to);
+                            
+                            // Setelah AI jalan, cek bar evaluasi sekali lagi untuk posisi terbaru
+                            fetchAnalysis(false); 
+                        }
+                    } else {
+                        $status.html('Waduh, API sedang sibuk.');
+                    }
+                },
+                error: function() {
+                    $status.html('Gagal terhubung ke server Stockfish.');
+                }
+            });
         }
 
         function onDragStart (source, piece, position, orientation) {
@@ -178,7 +289,11 @@
             board.position(game.fen());
             
             if ($('#autoAiCheck').is(':checked') && !game.game_over()) {
-                tanyaStockfish();
+                // Jalankan langkah AI (otomatis mengupdate bar juga)
+                fetchAnalysis(true);
+            } else if (!game.game_over()) {
+                // Jika Auto AI mati, cukup update Bar Evaluasinya saja saat pemain melangkah!
+                fetchAnalysis(false);
             }
         }
 
@@ -200,35 +315,6 @@
             $pgn.html(game.pgn());
         }
 
-        function tanyaStockfish() {
-            if (game.game_over()) return;
-            
-            $status.html('Stockfish sedang berpikir keras...');
-            var currentFen = game.fen();
-            
-            $.ajax({
-                url: 'https://stockfish.online/api/s/v2.php',
-                type: 'GET',
-                data: { fen: currentFen, depth: 13 },
-                success: function(response) {
-                    if(response.success) {
-                        var bestMoveUCI = response.bestmove.split(' ')[1];
-                        var moveObj = game.move(bestMoveUCI, {sloppy: true});
-                        board.position(game.fen());
-                        
-                        highlightLastMove(moveObj.from, moveObj.to);
-                        
-                        updateStatus();
-                    } else {
-                        $status.html('Waduh, AI lagi pusing (Error).');
-                    }
-                },
-                error: function() {
-                    $status.html('Gagal terhubung ke server Stockfish.');
-                }
-            });
-        }
-
         var config = {
             draggable: true,
             position: 'start',
@@ -241,20 +327,25 @@
         board = Chessboard('myBoard', config);
         updateStatus();
 
-        $('#startBtn').on('click', function() { game.reset(); board.start(); removeHighlights(); updateStatus(); });
-        $('#clearBtn').on('click', function() { game.clear(); board.clear(); removeHighlights(); updateStatus(); });
+        // Panggil evaluasi awal saat web pertama kali dibuka
+        $(document).ready(function() {
+            fetchAnalysis(false);
+        });
+
+        $('#startBtn').on('click', function() { game.reset(); board.start(); removeHighlights(); fetchAnalysis(false); });
+        $('#clearBtn').on('click', function() { game.clear(); board.clear(); removeHighlights(); updateEvalBar(0, null); updateStatus(); });
         $('#flipBtn').on('click', board.flip);
         $('#undoBtn').on('click', function() { 
             game.undo(); 
             if ($('#autoAiCheck').is(':checked')) { game.undo(); }
             board.position(game.fen()); 
             removeHighlights(); 
-            updateStatus(); 
+            fetchAnalysis(false); // Update bar setelah undo
         });
 
         $('#analyzeBtn').on('click', function() {
             if (game.game_over()) { alert("Permainan sudah berakhir!"); return; }
-            tanyaStockfish();
+            fetchAnalysis(true);
         });
 
     </script>
